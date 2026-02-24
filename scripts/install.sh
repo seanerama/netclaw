@@ -38,7 +38,7 @@ clone_or_pull() {
 
 NETCLAW_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MCP_DIR="$NETCLAW_DIR/mcp-servers"
-TOTAL_STEPS=23
+TOTAL_STEPS=24
 
 echo "========================================="
 echo "  NetClaw - CCIE Network Agent"
@@ -80,6 +80,15 @@ if ! check_command pip3; then
         log_error "pip3 is required for Python package installation"
         MISSING=1
     fi
+fi
+
+# Go toolchain (soft prerequisite — needed for ContainerLab MCP server)
+if check_command go; then
+    GO_VERSION=$(go version | awk '{print $3}' | sed 's/go//')
+    log_info "Go version: $GO_VERSION"
+else
+    log_warn "Go not found — ContainerLab MCP server will not be built"
+    log_warn "Install Go from https://go.dev/dl/ to enable ContainerLab support"
 fi
 
 if [ "$MISSING" -eq 1 ]; then
@@ -436,10 +445,38 @@ fi
 echo ""
 
 # ═══════════════════════════════════════════
-# Step 20: Packet Buddy MCP Server (pcap analysis)
+# Step 20: ContainerLab MCP Server (Go binary)
 # ═══════════════════════════════════════════
 
-log_step "20/$TOTAL_STEPS Installing Packet Buddy MCP Server..."
+log_step "20/$TOTAL_STEPS Installing ContainerLab MCP Server..."
+echo "  Source: https://github.com/FloSch62/clab-mcp-server"
+echo "  Auth: ContainerLab API server credentials"
+
+CLAB_MCP_DIR="$MCP_DIR/clab-mcp-server"
+clone_or_pull "$CLAB_MCP_DIR" "https://github.com/FloSch62/clab-mcp-server.git"
+
+if command -v go &> /dev/null; then
+    log_info "Building ContainerLab MCP server..."
+    cd "$CLAB_MCP_DIR" && go build -o clab-mcp-server . && cd "$NETCLAW_DIR"
+    if [ -f "$CLAB_MCP_DIR/clab-mcp-server" ]; then
+        log_info "ContainerLab MCP ready: $CLAB_MCP_DIR/clab-mcp-server"
+    else
+        log_error "ContainerLab MCP build failed — binary not found"
+        log_warn "Try building manually: cd $CLAB_MCP_DIR && go build -o clab-mcp-server ."
+    fi
+else
+    log_warn "Go not installed — skipping ContainerLab MCP build"
+    log_warn "Install Go from https://go.dev/dl/, then run:"
+    log_warn "  cd $CLAB_MCP_DIR && go build -o clab-mcp-server ."
+fi
+
+echo ""
+
+# ═══════════════════════════════════════════
+# Step 21: Packet Buddy MCP Server (pcap analysis)
+# ═══════════════════════════════════════════
+
+log_step "21/$TOTAL_STEPS Installing Packet Buddy MCP Server..."
 echo "  Pcap analysis via tshark — upload pcaps via Slack or disk"
 
 PACKET_BUDDY_MCP_DIR="$MCP_DIR/packet-buddy-mcp"
@@ -472,10 +509,10 @@ log_info "Pcap upload directory: /tmp/netclaw-pcaps"
 echo ""
 
 # ═══════════════════════════════════════════
-# Step 21: Deploy skills and set environment
+# Step 22: Deploy skills and set environment
 # ═══════════════════════════════════════════
 
-log_step "21/$TOTAL_STEPS Deploying skills and configuration..."
+log_step "22/$TOTAL_STEPS Deploying skills and configuration..."
 
 PYATS_SCRIPT="$PYATS_MCP_DIR/pyats_mcp_server.py"
 TESTBED_PATH="$NETCLAW_DIR/testbed/testbed.yaml"
@@ -540,6 +577,7 @@ declare -A ENV_VARS=(
     ["F5_MCP_SCRIPT"]="$F5_MCP_DIR/F5MCPserver.py"
     ["CATC_MCP_SCRIPT"]="$CATC_MCP_DIR/catalyst-center-mcp.py"
     ["PACKET_BUDDY_MCP_SCRIPT"]="$PACKET_BUDDY_MCP_DIR/server.py"
+    ["CLAB_MCP_BINARY"]="$CLAB_MCP_DIR/clab-mcp-server"
 )
 
 for key in "${!ENV_VARS[@]}"; do
@@ -580,10 +618,10 @@ fi
 echo ""
 
 # ═══════════════════════════════════════════
-# Step 22: Verify installation
+# Step 23: Verify installation
 # ═══════════════════════════════════════════
 
-log_step "22/$TOTAL_STEPS Verifying installation..."
+log_step "23/$TOTAL_STEPS Verifying installation..."
 
 SERVERS_OK=0
 SERVERS_FAIL=0
@@ -613,6 +651,7 @@ verify_file "Subnet Calculator MCP" "$SUBNET_MCP_DIR/servers/subnetcalculator_mc
 verify_file "F5 BIG-IP MCP" "$F5_MCP_DIR/F5MCPserver.py"
 verify_file "Catalyst Center MCP" "$CATC_MCP_DIR/catalyst-center-mcp.py"
 verify_file "Packet Buddy MCP" "$PACKET_BUDDY_MCP_DIR/server.py"
+verify_file "ContainerLab MCP" "$CLAB_MCP_DIR/clab-mcp-server"
 verify_file "MCP Call Script" "$NETCLAW_DIR/scripts/mcp-call.py"
 
 echo ""
@@ -620,10 +659,10 @@ log_info "Verification: $SERVERS_OK OK, $SERVERS_FAIL FAILED"
 echo ""
 
 # ═══════════════════════════════════════════
-# Step 23: Summary
+# Step 24: Summary
 # ═══════════════════════════════════════════
 
-log_step "23/$TOTAL_STEPS Installation Summary"
+log_step "24/$TOTAL_STEPS Installation Summary"
 echo ""
 echo "========================================="
 echo "  NetClaw Installation Complete"
@@ -632,7 +671,7 @@ echo ""
 
 SKILL_COUNT=$(ls -d "$NETCLAW_DIR/workspace/skills/"*/ 2>/dev/null | wc -l)
 
-echo "MCP Servers Installed (18):"
+echo "MCP Servers Installed (19):"
 echo "  ┌─────────────────────────────────────────────────────────────"
 echo "  │ NETWORK DEVICE AUTOMATION:"
 echo "  │   pyATS              Cisco device CLI, Genie parsers"
@@ -656,6 +695,9 @@ echo "  │   GitHub              Issues, PRs, code search, Actions (Docker)"
 echo "  │"
 echo "  │ PACKET ANALYSIS:"
 echo "  │   Packet Buddy        pcap/pcapng analysis via tshark"
+echo "  │"
+echo "  │ LAB MANAGEMENT:"
+echo "  │   ContainerLab      Deploy, inspect, manage containerized network labs"
 echo "  │"
 echo "  │ UTILITIES:"
 echo "  │   Subnet Calculator   IPv4 + IPv6 CIDR calculator"

@@ -287,6 +287,24 @@ else
 fi
 echo ""
 
+# --- ContainerLab ---
+if yesno "Do you have a ContainerLab API server running?"; then
+    echo ""
+    echo -e "  ContainerLab MCP lets NetClaw deploy and manage containerized network labs."
+    echo -e "  Requires a running ContainerLab API server (clab-api-server)."
+    echo ""
+    prompt CLAB_URL "ContainerLab API Server URL" "http://localhost:8080"
+    prompt CLAB_USER "ContainerLab Username" "admin"
+    prompt_secret CLAB_PASS "ContainerLab Password"
+    [ -n "$CLAB_URL" ] && set_env "CLAB_API_SERVER_URL" "$CLAB_URL"
+    [ -n "$CLAB_USER" ] && set_env "CLAB_API_USERNAME" "$CLAB_USER"
+    [ -n "$CLAB_PASS" ] && set_env "CLAB_API_PASSWORD" "$CLAB_PASS"
+    ok "ContainerLab configured"
+else
+    skip "ContainerLab"
+fi
+echo ""
+
 # ═══════════════════════════════════════════
 # Step 3: Your Identity
 # ═══════════════════════════════════════════
@@ -343,6 +361,7 @@ grep -q "^CCC_HOST=" "$OPENCLAW_ENV" 2>/dev/null && ok "Catalyst Center" || skip
 grep -q "^NVD_API_KEY=" "$OPENCLAW_ENV" 2>/dev/null && ok "NVD CVE Scanning" || skip "NVD CVE Scanning"
 grep -q "^AZURE_TENANT_ID=" "$OPENCLAW_ENV" 2>/dev/null && ok "Microsoft Graph (Office 365)" || skip "Microsoft Graph (Office 365)"
 grep -q "^GITHUB_PERSONAL_ACCESS_TOKEN=" "$OPENCLAW_ENV" 2>/dev/null && ok "GitHub" || skip "GitHub"
+grep -q "^CLAB_API_SERVER_URL=" "$OPENCLAW_ENV" 2>/dev/null && ok "ContainerLab" || skip "ContainerLab"
 
 echo ""
 echo -e "  ${BOLD}Ready to go:${NC}"
